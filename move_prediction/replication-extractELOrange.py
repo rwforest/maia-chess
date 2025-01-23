@@ -1,48 +1,69 @@
 import maia_chess_backend
-
 import argparse
-import bz2
+import zstandard as zstd
 
-#@haibrid_chess_utils.logged_main
 def main():
-    parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('eloMin', type=int, help='min ELO')
-    parser.add_argument('eloMax', type=int, help='max ELO')
-    parser.add_argument('output', help='output file')
-    parser.add_argument('targets', nargs='+', help='target files')
-    parser.add_argument('--remove_bullet', action='store_true', help='Remove bullet and ultrabullet games')
-    parser.add_argument('--remove_low_time', action='store_true', help='Remove low time moves from games')
+    parser = argparse.ArgumentParser(description="Filter and process chess games based on ELO and other criteria.")
+    parser.add_argument("eloMin", type=int, help="Minimum ELO rating.")
+    parser.add_argument("eloMax", type=int, help="Maximum ELO rating.")
+    parser.add_argument("output", help="Output file (compressed, .zst format).")
+    parser.add_argument("targets", nargs="+", help="List of input game files.")
+    parser.add_argument("--remove_bullet", action="store_true", help="Exclude bullet and ultrabullet games.")
+    parser.add_argument("--remove_low_time", action="store_true", help="Exclude low-time moves from games.")
 
     args = parser.parse_args()
-    gamesWritten = 0
-    print(f"Starting writing to: {args.output}")
-    with bz2.open(args.output, 'wt') as f:
-        for num_files, target in enumerate(sorted(args.targets)):
-            print(f"{num_files} reading: {target}")
-            Games = maia_chess_backend.LightGamesFile(target, parseMoves = False)
-            for i, (dat, lines) in enumerate(Games):
-                try:
-                    whiteELO = int(dat['WhiteElo'])
-                    BlackELO = int(dat['BlackElo'])
-                except ValueError:
-                    continue
-                if whiteELO > args.eloMax or whiteELO <= args.eloMin:
-                    continue
-                elif BlackELO > args.eloMax or BlackELO <= args.eloMin:
-                    continue
-                elif dat['Result']  not in ['1-0', '0-1', '1/2-1/2']:
-                    continue
-                elif args.remove_bullet and 'Bullet' in dat['Event']:
-                    continue
-                else:
-                    if args.remove_low_time:
-                        f.write(maia_chess_backend.remove_low_time(lines))
-                    else:
-                        f.write(lines)
-                    gamesWritten += 1
-                if i % 1000 == 0:
-                    print(f"{i}: written {gamesWritten} files {num_files}: {target}".ljust(79), end = '\r')
-            print(f"Done: {target} {i}".ljust(79))
 
-if __name__ == '__main__':
+    games_written = 0
+    print(f"Starting to write filtered games to: {args.output}")
+
+    try:
+        # Open the output file for writing in text mode with Zstandard
+        with zstd.open(args.output, mode="w", encoding="utf-8") as output_file:
+            for num_files, target in enumerate(sorted(args.targets)):
+                print(f"Processing file {num_files + 1}/{len(args.targets)}: {target}")
+
+                try:
+                    games = maia_chess_backend.LightGamesFile(target, parseMoves=False)
+                except Exception as e:
+                    print(f"Error reading {target}: {e}")
+                    continue
+
+                for i, (dat, lines) in enumerate(games):
+                    try:
+                        # Parse ELO ratings
+                        white_elo = int(dat.get("WhiteElo", 0))
+                        black_elo = int(dat.get("BlackElo", 0))
+                    except ValueError:
+                        continue
+
+                    # Apply filters
+                    if white_elo > args.eloMax or white_elo <= args.eloMin:
+                        continue
+                    if black_elo > args.eloMax or black_elo <= args.eloMin:
+                        continue
+                    if dat.get("Result") not in ["1-0", "0-1", "1/2-1/2"]:
+                        continue
+                    if args.remove_bullet and "Bullet" in dat.get("Event", ""):
+                        continue
+
+                    # Write filtered games
+                    if args.remove_low_time:
+                        output_file.write(maia_chess_backend.remove_low_time(lines))
+                    else:
+                        output_file.write(lines)
+
+                    games_written += 1
+
+                    # Print progress every 1000 games
+                    if i % 1000 == 0:
+                        print(f"Processed {i} games, written {games_written} games from {target}".ljust(79), end="\r")
+
+                print(f"Finished processing: {target}".ljust(79))
+
+    except Exception as e:
+        print(f"An error occurred while writing to {args.output}: {e}")
+
+    print(f"Done! Total games written: {games_written}")
+
+if __name__ == "__main__":
     main()
