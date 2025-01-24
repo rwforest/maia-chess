@@ -1,4 +1,4 @@
-import bz2
+import zstandard as zstd
 import collections.abc
 import re
 
@@ -11,7 +11,7 @@ moveRegex = re.compile(r'\d+[.][ \.](\S+) (?:{[^}]*} )?(\S+)')
 class GamesFile(collections.abc.Iterable):
     def __init__(self, path, cacheGames = False):
         self.path = path
-        self.f = bz2.open(self.path, 'rt')
+        self.f = zstd.open(self.path, 'rt')
 
         self.cache = cacheGames
         self.games = []
@@ -56,8 +56,8 @@ class GamesFile(collections.abc.Iterable):
 
 class LightGamesFile(object):
     def __init__(self, path, parseMoves = True, just_games = False):
-        if path.endswith('bz2'):
-            self.f = bz2.open(path, 'rt')
+        if path.endswith('zst'):
+            self.f = zstd.open(path, 'rt')
         else:
             self.f = open(path, 'r')
         self.parseMoves = parseMoves
