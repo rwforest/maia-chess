@@ -18,7 +18,7 @@ def main():
 
     try:
         # Open the output file for writing in text mode with Zstandard
-        with zstd.open(args.output, mode="wb") as output_file:
+        with zstd.open(args.output, mode="wt") as output_file:
             for num_files, target in enumerate(sorted(args.targets)):
                 print(f"Processing file {num_files + 1}/{len(args.targets)}: {target}")
 
